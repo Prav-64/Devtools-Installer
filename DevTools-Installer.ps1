@@ -45,8 +45,9 @@ if ($selection -eq "5") {
     }
 }
 
-# Add to PATH function
-function Add-ToPath($path) {
+# Add to PATH function - this needs to be inside each job
+function Add-ToPath {
+    param($path)
     $envPath = [Environment]::GetEnvironmentVariable("Path", "Machine")
     if ($envPath -notlike "*$path*") {
         [Environment]::SetEnvironmentVariable("Path", "$envPath;$path", "Machine")
@@ -55,24 +56,49 @@ function Add-ToPath($path) {
 
 # Install MinGW function
 function Install-MinGW {
+    param($installDir)
     $mingwDir = "$installDir\MinGW"
-    $logFile = "$tempDir\mingw_install.log"
+    $tempDir = "$env:TEMP\dev_setup"
     
     Write-Host "Installing MinGW..." -ForegroundColor Blue
+    
+    # Add-ToPath function definition inside the scope
+    function Add-ToPath {
+        param($path)
+        $envPath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+        if ($envPath -notlike "*$path*") {
+            [Environment]::SetEnvironmentVariable("Path", "$envPath;$path", "Machine")
+        }
+    }
     
     # Download and install 7-Zip if needed
     $7zPath = "$env:ProgramFiles\7-Zip\7z.exe"
     if (-not (Test-Path $7zPath)) {
         $7zUrl = "https://www.7-zip.org/a/7z2301-x64.exe"
         $7zInstaller = "$tempDir\7z-installer.exe"
-        Invoke-WebRequest -Uri $7zUrl -OutFile $7zInstaller
+        
+        # Use BitsTransfer instead of Invoke-WebRequest for faster downloads
+        Start-BitsTransfer -Source $7zUrl -Destination $7zInstaller -ErrorAction SilentlyContinue
+        if (-not (Test-Path $7zInstaller)) {
+            # Fallback to Invoke-WebRequest with timeout
+            $webClient = New-Object System.Net.WebClient
+            $webClient.DownloadFile($7zUrl, $7zInstaller)
+        }
+        
         Start-Process -FilePath $7zInstaller -ArgumentList "/S" -Wait
     }
     
     # Download and extract MinGW
     $mingwUrl = "https://github.com/niXman/mingw-builds-binaries/releases/download/13.1.0-rt_v11-rev1/x86_64-13.1.0-release-posix-seh-msvcrt-rt_v11-rev1.7z"
     $mingwArchive = "$tempDir\mingw64.7z"
-    Invoke-WebRequest -Uri $mingwUrl -OutFile $mingwArchive
+    
+    # Use BitsTransfer instead of Invoke-WebRequest for faster downloads
+    Start-BitsTransfer -Source $mingwUrl -Destination $mingwArchive -ErrorAction SilentlyContinue
+    if (-not (Test-Path $mingwArchive)) {
+        # Fallback to WebClient
+        $webClient = New-Object System.Net.WebClient
+        $webClient.DownloadFile($mingwUrl, $mingwArchive)
+    }
     
     New-Item -ItemType Directory -Path $mingwDir -Force | Out-Null
     Start-Process -FilePath $7zPath -ArgumentList "x", "$mingwArchive", "-o$mingwDir", "-y" -Wait
@@ -90,16 +116,33 @@ function Install-MinGW {
 
 # Install Python function
 function Install-Python {
+    param($installDir)
     $pythonDir = "$installDir\Python"
-    $logFile = "$tempDir\python_install.log"
+    $tempDir = "$env:TEMP\dev_setup"
     
     Write-Host "Installing Python..." -ForegroundColor Blue
+    
+    # Add-ToPath function definition inside the scope
+    function Add-ToPath {
+        param($path)
+        $envPath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+        if ($envPath -notlike "*$path*") {
+            [Environment]::SetEnvironmentVariable("Path", "$envPath;$path", "Machine")
+        }
+    }
     
     # Download and install Python
     $pythonVersion = "3.11.6"
     $pythonUrl = "https://www.python.org/ftp/python/$pythonVersion/python-$pythonVersion-amd64.exe"
     $pythonInstaller = "$tempDir\python-installer.exe"
-    Invoke-WebRequest -Uri $pythonUrl -OutFile $pythonInstaller
+    
+    # Use BitsTransfer instead of Invoke-WebRequest for faster downloads
+    Start-BitsTransfer -Source $pythonUrl -Destination $pythonInstaller -ErrorAction SilentlyContinue
+    if (-not (Test-Path $pythonInstaller)) {
+        # Fallback to WebClient
+        $webClient = New-Object System.Net.WebClient
+        $webClient.DownloadFile($pythonUrl, $pythonInstaller)
+    }
     
     $pythonArgs = "/quiet InstallAllUsers=1 PrependPath=1 Include_test=0 TargetDir=$pythonDir"
     Start-Process -FilePath $pythonInstaller -ArgumentList $pythonArgs -Wait
@@ -118,15 +161,32 @@ function Install-Python {
 
 # Install Java function
 function Install-Java {
+    param($installDir)
     $javaDir = "$installDir\Java"
-    $logFile = "$tempDir\java_install.log"
+    $tempDir = "$env:TEMP\dev_setup"
     
     Write-Host "Installing Java..." -ForegroundColor Blue
+    
+    # Add-ToPath function definition inside the scope
+    function Add-ToPath {
+        param($path)
+        $envPath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+        if ($envPath -notlike "*$path*") {
+            [Environment]::SetEnvironmentVariable("Path", "$envPath;$path", "Machine")
+        }
+    }
     
     # Download and extract Java
     $javaUrl = "https://download.java.net/java/GA/jdk17.0.2/dfd4a8d0985749f896bed50d7138ee7f/8/GPL/openjdk-17.0.2_windows-x64_bin.zip"
     $javaArchive = "$tempDir\java.zip"
-    Invoke-WebRequest -Uri $javaUrl -OutFile $javaArchive
+    
+    # Use BitsTransfer instead of Invoke-WebRequest for faster downloads
+    Start-BitsTransfer -Source $javaUrl -Destination $javaArchive -ErrorAction SilentlyContinue
+    if (-not (Test-Path $javaArchive)) {
+        # Fallback to WebClient
+        $webClient = New-Object System.Net.WebClient
+        $webClient.DownloadFile($javaUrl, $javaArchive)
+    }
     
     New-Item -ItemType Directory -Path $javaDir -Force | Out-Null
     Expand-Archive -Path $javaArchive -DestinationPath $javaDir -Force
@@ -152,14 +212,22 @@ function Install-Java {
 
 # Install Visual Studio Code function
 function Install-VSCode {
-    $logFile = "$tempDir\vscode_install.log"
+    param($installDir)
+    $tempDir = "$env:TEMP\dev_setup"
     
     Write-Host "Installing Visual Studio Code..." -ForegroundColor Blue
     
     # Download and install VS Code
     $vscodeUrl = "https://code.visualstudio.com/sha/download?build=stable&os=win32-x64"
     $vscodeInstaller = "$tempDir\vscode-installer.exe"
-    Invoke-WebRequest -Uri $vscodeUrl -OutFile $vscodeInstaller
+    
+    # Use BitsTransfer instead of Invoke-WebRequest for faster downloads
+    Start-BitsTransfer -Source $vscodeUrl -Destination $vscodeInstaller -ErrorAction SilentlyContinue
+    if (-not (Test-Path $vscodeInstaller)) {
+        # Fallback to WebClient
+        $webClient = New-Object System.Net.WebClient
+        $webClient.DownloadFile($vscodeUrl, $vscodeInstaller)
+    }
     
     Start-Process -FilePath $vscodeInstaller -ArgumentList "/VERYSILENT", "/MERGETASKS=`"addcontextmenufiles,addcontextmenufolders,associatewithfiles,addtopath`"" -Wait
     
@@ -171,38 +239,234 @@ function Install-VSCode {
     }
 }
 
+# Make sure BitsTransfer module is loaded
+Import-Module BitsTransfer -ErrorAction SilentlyContinue
+
 # Run installations in parallel
 $jobs = @()
 
 foreach ($tool in $installTools) {
     switch ($tool) {
         "mingw" {
-            $jobs += Start-Job -ScriptBlock {
-                param($script, $dir)
-                . ([ScriptBlock]::Create($script))
-                Install-MinGW
-            } -ArgumentList ${function:Install-MinGW}, $installDir
+            $jobs += Start-Job -InitializationScript {
+                Import-Module BitsTransfer -ErrorAction SilentlyContinue
+            } -ScriptBlock {
+                param($installDir)
+                
+                # Define functions inside the job
+                function Add-ToPath {
+                    param($path)
+                    $envPath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+                    if ($envPath -notlike "*$path*") {
+                        [Environment]::SetEnvironmentVariable("Path", "$envPath;$path", "Machine")
+                    }
+                }
+                
+                function Install-MinGW {
+                    param($installDir)
+                    $mingwDir = "$installDir\MinGW"
+                    $tempDir = "$env:TEMP\dev_setup"
+                    
+                    Write-Host "Installing MinGW..." -ForegroundColor Blue
+                    
+                    # Download and install 7-Zip if needed
+                    $7zPath = "$env:ProgramFiles\7-Zip\7z.exe"
+                    if (-not (Test-Path $7zPath)) {
+                        $7zUrl = "https://www.7-zip.org/a/7z2301-x64.exe"
+                        $7zInstaller = "$tempDir\7z-installer.exe"
+                        
+                        # Use BitsTransfer instead of Invoke-WebRequest for faster downloads
+                        Start-BitsTransfer -Source $7zUrl -Destination $7zInstaller -ErrorAction SilentlyContinue
+                        if (-not (Test-Path $7zInstaller)) {
+                            # Fallback to WebClient
+                            $webClient = New-Object System.Net.WebClient
+                            $webClient.DownloadFile($7zUrl, $7zInstaller)
+                        }
+                        
+                        Start-Process -FilePath $7zInstaller -ArgumentList "/S" -Wait
+                    }
+                    
+                    # Download and extract MinGW
+                    $mingwUrl = "https://github.com/niXman/mingw-builds-binaries/releases/download/13.1.0-rt_v11-rev1/x86_64-13.1.0-release-posix-seh-msvcrt-rt_v11-rev1.7z"
+                    $mingwArchive = "$tempDir\mingw64.7z"
+                    
+                    # Use BitsTransfer instead of Invoke-WebRequest for faster downloads
+                    Start-BitsTransfer -Source $mingwUrl -Destination $mingwArchive -ErrorAction SilentlyContinue
+                    if (-not (Test-Path $mingwArchive)) {
+                        # Fallback to WebClient
+                        $webClient = New-Object System.Net.WebClient
+                        $webClient.DownloadFile($mingwUrl, $mingwArchive)
+                    }
+                    
+                    New-Item -ItemType Directory -Path $mingwDir -Force | Out-Null
+                    Start-Process -FilePath $7zPath -ArgumentList "x", "$mingwArchive", "-o$mingwDir", "-y" -Wait
+                    
+                    # Add to PATH
+                    Add-ToPath "$mingwDir\mingw64\bin"
+                    
+                    # Verify
+                    if (Test-Path "$mingwDir\mingw64\bin\g++.exe") {
+                        Write-Host "MinGW installed successfully" -ForegroundColor Green
+                    } else {
+                        Write-Host "MinGW installation failed" -ForegroundColor Red
+                    }
+                }
+                
+                # Run the installation
+                Install-MinGW -installDir $installDir
+            } -ArgumentList $installDir
         }
         "python" {
-            $jobs += Start-Job -ScriptBlock {
-                param($script, $dir)
-                . ([ScriptBlock]::Create($script))
-                Install-Python
-            } -ArgumentList ${function:Install-Python}, $installDir
+            $jobs += Start-Job -InitializationScript {
+                Import-Module BitsTransfer -ErrorAction SilentlyContinue
+            } -ScriptBlock {
+                param($installDir)
+                
+                # Define functions inside the job
+                function Add-ToPath {
+                    param($path)
+                    $envPath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+                    if ($envPath -notlike "*$path*") {
+                        [Environment]::SetEnvironmentVariable("Path", "$envPath;$path", "Machine")
+                    }
+                }
+                
+                function Install-Python {
+                    param($installDir)
+                    $pythonDir = "$installDir\Python"
+                    $tempDir = "$env:TEMP\dev_setup"
+                    
+                    Write-Host "Installing Python..." -ForegroundColor Blue
+                    
+                    # Download and install Python
+                    $pythonVersion = "3.11.6"
+                    $pythonUrl = "https://www.python.org/ftp/python/$pythonVersion/python-$pythonVersion-amd64.exe"
+                    $pythonInstaller = "$tempDir\python-installer.exe"
+                    
+                    # Use BitsTransfer instead of Invoke-WebRequest for faster downloads
+                    Start-BitsTransfer -Source $pythonUrl -Destination $pythonInstaller -ErrorAction SilentlyContinue
+                    if (-not (Test-Path $pythonInstaller)) {
+                        # Fallback to WebClient
+                        $webClient = New-Object System.Net.WebClient
+                        $webClient.DownloadFile($pythonUrl, $pythonInstaller)
+                    }
+                    
+                    $pythonArgs = "/quiet InstallAllUsers=1 PrependPath=1 Include_test=0 TargetDir=$pythonDir"
+                    Start-Process -FilePath $pythonInstaller -ArgumentList $pythonArgs -Wait
+                    
+                    # Add to PATH (redundancy)
+                    Add-ToPath $pythonDir
+                    Add-ToPath "$pythonDir\Scripts"
+                    
+                    # Verify
+                    if (Test-Path "$pythonDir\python.exe") {
+                        Write-Host "Python installed successfully" -ForegroundColor Green
+                    } else {
+                        Write-Host "Python installation failed" -ForegroundColor Red
+                    }
+                }
+                
+                # Run the installation
+                Install-Python -installDir $installDir
+            } -ArgumentList $installDir
         }
         "java" {
-            $jobs += Start-Job -ScriptBlock {
-                param($script, $dir)
-                . ([ScriptBlock]::Create($script))
-                Install-Java
-            } -ArgumentList ${function:Install-Java}, $installDir
+            $jobs += Start-Job -InitializationScript {
+                Import-Module BitsTransfer -ErrorAction SilentlyContinue
+            } -ScriptBlock {
+                param($installDir)
+                
+                # Define functions inside the job
+                function Add-ToPath {
+                    param($path)
+                    $envPath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+                    if ($envPath -notlike "*$path*") {
+                        [Environment]::SetEnvironmentVariable("Path", "$envPath;$path", "Machine")
+                    }
+                }
+                
+                function Install-Java {
+                    param($installDir)
+                    $javaDir = "$installDir\Java"
+                    $tempDir = "$env:TEMP\dev_setup"
+                    
+                    Write-Host "Installing Java..." -ForegroundColor Blue
+                    
+                    # Download and extract Java
+                    $javaUrl = "https://download.java.net/java/GA/jdk17.0.2/dfd4a8d0985749f896bed50d7138ee7f/8/GPL/openjdk-17.0.2_windows-x64_bin.zip"
+                    $javaArchive = "$tempDir\java.zip"
+                    
+                    # Use BitsTransfer instead of Invoke-WebRequest for faster downloads
+                    Start-BitsTransfer -Source $javaUrl -Destination $javaArchive -ErrorAction SilentlyContinue
+                    if (-not (Test-Path $javaArchive)) {
+                        # Fallback to WebClient
+                        $webClient = New-Object System.Net.WebClient
+                        $webClient.DownloadFile($javaUrl, $javaArchive)
+                    }
+                    
+                    New-Item -ItemType Directory -Path $javaDir -Force | Out-Null
+                    Expand-Archive -Path $javaArchive -DestinationPath $javaDir -Force
+                    
+                    # Find JDK directory
+                    $jdkDir = Get-ChildItem -Path $javaDir -Directory | Where-Object { $_.Name -like "jdk*" } | 
+                              Select-Object -First 1 -ExpandProperty FullName
+                    if (-not $jdkDir) {
+                        $jdkDir = $javaDir
+                    }
+
+                    # Set JAVA_HOME and add to PATH
+                    [Environment]::SetEnvironmentVariable("JAVA_HOME", $jdkDir, "Machine")
+                    Add-ToPath "$jdkDir\bin"
+                    
+                    # Verify
+                    if (Test-Path "$jdkDir\bin\java.exe") {
+                        Write-Host "Java installed successfully" -ForegroundColor Green
+                    } else {
+                        Write-Host "Java installation failed" -ForegroundColor Red
+                    }
+                }
+                
+                # Run the installation
+                Install-Java -installDir $installDir
+            } -ArgumentList $installDir
         }
         "vscode" {
-            $jobs += Start-Job -ScriptBlock {
-                param($script, $dir)
-                . ([ScriptBlock]::Create($script))
-                Install-VSCode
-            } -ArgumentList ${function:Install-VSCode}, $installDir
+            $jobs += Start-Job -InitializationScript {
+                Import-Module BitsTransfer -ErrorAction SilentlyContinue
+            } -ScriptBlock {
+                param($installDir)
+                
+                function Install-VSCode {
+                    param($installDir)
+                    $tempDir = "$env:TEMP\dev_setup"
+                    
+                    Write-Host "Installing Visual Studio Code..." -ForegroundColor Blue
+                    
+                    # Download and install VS Code
+                    $vscodeUrl = "https://code.visualstudio.com/sha/download?build=stable&os=win32-x64"
+                    $vscodeInstaller = "$tempDir\vscode-installer.exe"
+                    
+                    # Use BitsTransfer instead of Invoke-WebRequest for faster downloads
+                    Start-BitsTransfer -Source $vscodeUrl -Destination $vscodeInstaller -ErrorAction SilentlyContinue
+                    if (-not (Test-Path $vscodeInstaller)) {
+                        # Fallback to WebClient
+                        $webClient = New-Object System.Net.WebClient
+                        $webClient.DownloadFile($vscodeUrl, $vscodeInstaller)
+                    }
+                    
+                    Start-Process -FilePath $vscodeInstaller -ArgumentList "/VERYSILENT", "/MERGETASKS=`"addcontextmenufiles,addcontextmenufolders,associatewithfiles,addtopath`"" -Wait
+                    
+                    # Verify
+                    if (Test-Path "$env:ProgramFiles\Microsoft VS Code\Code.exe") {
+                        Write-Host "Visual Studio Code installed successfully" -ForegroundColor Green
+                    } else {
+                        Write-Host "Visual Studio Code installation failed" -ForegroundColor Red
+                    }
+                }
+                
+                # Run the installation
+                Install-VSCode -installDir $installDir
+            } -ArgumentList $installDir
         }
     }
 }
